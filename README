@@ -1,0 +1,1 @@
+gcc trivial_example.c -lopus
