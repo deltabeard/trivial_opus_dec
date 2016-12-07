@@ -1,2 +1,2 @@
 all:
-	gcc main.c -lopusfile -Os
+	gcc main.c -lopusfile -Os -Wall
