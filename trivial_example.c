@@ -17,10 +17,6 @@
 #if !defined(_POSIX_SOURCE)
 # define _POSIX_SOURCE 1
 #endif
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
 #include <opus/opusfile.h>
 #if defined(_WIN32)
 # include "win32utf8.h"
@@ -130,20 +126,13 @@ static void make_wav_header(unsigned char _dst[44],ogg_int64_t _duration){
 	}
 }
 
-int main(int _argc,const char **_argv){
-	OggOpusFile  *of;
-	FILE		*wav;
-	ogg_int64_t   duration;
-	unsigned char wav_header[44];
-	int           ret;
-	int           output_seekable;
-#if defined(_WIN32)
-	win32_utf8_setup(&_argc,&_argv);
-#endif
-	if(_argc!=3){
-		fprintf(stderr,"Usage: %s <in.opus> <out.wav>\n",_argv[0]);
-		return EXIT_FAILURE;
-	}
+int convOpus(const char* in, const char *outf){
+	OggOpusFile		*of;
+	FILE			*wav;
+	ogg_int64_t		duration;
+	unsigned char	wav_header[44];
+	int				ret;
+	int				output_seekable;
 #if 0
 		if(of==NULL){
 			OpusFileCallbacks  cb={NULL,NULL,NULL,NULL};
@@ -155,15 +144,15 @@ int main(int _argc,const char **_argv){
 			of=op_open_callbacks(fp,&cb,NULL,0,NULL);
 		}
 #else
-	of = op_open_file(_argv[1],&ret);
-	if((wav = fopen(_argv[2], "w+")) == NULL)
+	of = op_open_file(in, &ret);
+	if((wav = fopen(outf, "w+")) == NULL)
 	{
-		fprintf(stderr,"Failed to open file '%s': %i\n",_argv[2],errno);
+		fprintf(stderr,"Failed to open file '%s': %i\n",outf,errno);
 		return EXIT_FAILURE;
 	}
 #endif
 	if(of==NULL){
-		fprintf(stderr,"Failed to open file '%s': %i\n",_argv[1],ret);
+		fprintf(stderr,"Failed to open file '%s': %i\n",in,ret);
 		return EXIT_FAILURE;
 	}
 	duration=0;
@@ -208,8 +197,6 @@ int main(int _argc,const char **_argv){
 		bitrate=0;
 		for(;;){
 			ogg_int64_t   next_pcm_offset;
-			//opus_int16*		pcm = malloc(120*48*2*sizeof(opus_int16));
-			//unsigned char*	out = malloc(120*48*2*2*sizeof(unsigned char));
 			int           li;
 			int           si;
 			/*Although we would generally prefer to use the float interface, WAV
@@ -217,7 +204,7 @@ int main(int _argc,const char **_argv){
 			  universally supported, so that's what we output.*/
 			ret=op_read_stereo(of,pcm,sizeof(pcm)/sizeof(*pcm));
 			if(ret<0){
-				fprintf(stderr,"\nError decoding '%s': %i\n",_argv[1],ret);
+				fprintf(stderr,"\nError decoding '%s': %i\n",in,ret);
 				ret=EXIT_FAILURE;
 				break;
 			}
@@ -349,6 +336,9 @@ int main(int _argc,const char **_argv){
 			}
 		}
 	}
+	fclose(wav);
 	op_free(of);
 	return ret;
 }
+
+
