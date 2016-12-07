@@ -135,6 +135,9 @@ int convOpus(const char* in, const char *outf){
 				break;
 			}
 			nsamples+=ret;
+
+			if(nsamples % 1000 == 0)
+				fprintf(stderr, "\rSample: %li", (long)nsamples);
 			//End of for loop.
 		}
 		free(pcm);
