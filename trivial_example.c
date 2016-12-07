@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include <opusfile.h>
+#include <opus/opusfile.h>
 #if defined(_WIN32)
 # include "win32utf8.h"
 # undef fileno
@@ -132,27 +132,18 @@ static void make_wav_header(unsigned char _dst[44],ogg_int64_t _duration){
 
 int main(int _argc,const char **_argv){
 	OggOpusFile  *of;
+	FILE		*wav;
 	ogg_int64_t   duration;
 	unsigned char wav_header[44];
 	int           ret;
-	int           is_ssl;
 	int           output_seekable;
 #if defined(_WIN32)
 	win32_utf8_setup(&_argc,&_argv);
 #endif
-	if(_argc!=2){
-		fprintf(stderr,"Usage: %s <file.opus>\n",_argv[0]);
+	if(_argc!=3){
+		fprintf(stderr,"Usage: %s <in.opus> <out.wav>\n",_argv[0]);
 		return EXIT_FAILURE;
 	}
-	is_ssl=0;
-	if(strcmp(_argv[1],"-")==0){
-		OpusFileCallbacks cb={NULL,NULL,NULL,NULL};
-		of=op_open_callbacks(op_fdopen(&cb,fileno(stdin),"rb"),&cb,NULL,0,&ret);
-	}
-	else{
-		OpusServerInfo info;
-		/*Try to treat the argument as a URL.*/
-		of=op_open_url(_argv[1],&ret,OP_GET_SERVER_INFO(&info),NULL);
 #if 0
 		if(of==NULL){
 			OpusFileCallbacks  cb={NULL,NULL,NULL,NULL};
@@ -164,45 +155,19 @@ int main(int _argc,const char **_argv){
 			of=op_open_callbacks(fp,&cb,NULL,0,NULL);
 		}
 #else
-		if(of==NULL)of=op_open_file(_argv[1],&ret);
-#endif
-		else{
-			if(info.name!=NULL){
-				fprintf(stderr,"Station name: %s\n",info.name);
-			}
-			if(info.description!=NULL){
-				fprintf(stderr,"Station description: %s\n",info.description);
-			}
-			if(info.genre!=NULL){
-				fprintf(stderr,"Station genre: %s\n",info.genre);
-			}
-			if(info.url!=NULL){
-				fprintf(stderr,"Station homepage: %s\n",info.url);
-			}
-			if(info.bitrate_kbps>=0){
-				fprintf(stderr,"Station bitrate: %u kbps\n",
-						(unsigned)info.bitrate_kbps);
-			}
-			if(info.is_public>=0){
-				fprintf(stderr,"%s\n",
-						info.is_public?"Station is public.":"Station is private.");
-			}
-			if(info.server!=NULL){
-				fprintf(stderr,"Server software: %s\n",info.server);
-			}
-			if(info.content_type!=NULL){
-				fprintf(stderr,"Content-Type: %s\n",info.content_type);
-			}
-			is_ssl=info.is_ssl;
-			opus_server_info_clear(&info);
-		}
+	of = op_open_file(_argv[1],&ret);
+	if((wav = fopen(_argv[2], "w+")) == NULL)
+	{
+		fprintf(stderr,"Failed to open file '%s': %i\n",_argv[2],errno);
+		return EXIT_FAILURE;
 	}
+#endif
 	if(of==NULL){
 		fprintf(stderr,"Failed to open file '%s': %i\n",_argv[1],ret);
 		return EXIT_FAILURE;
 	}
 	duration=0;
-	output_seekable=fseek(stdout,0,SEEK_CUR)!=-1;
+	output_seekable=fseek(wav,0,SEEK_CUR)!=-1;
 	if(op_seekable(of)){
 		opus_int64  size;
 		fprintf(stderr,"Total number of links: %i\n",op_link_count(of));
@@ -221,7 +186,7 @@ int main(int _argc,const char **_argv){
 				"Writing non-standard WAV header with invalid chunk sizes.\n");
 	}
 	make_wav_header(wav_header,duration);
-	if(!fwrite(wav_header,sizeof(wav_header),1,stdout)){
+	if(!fwrite(wav_header,sizeof(wav_header),1,wav)){
 		fprintf(stderr,"Error writing WAV header: %s\n",strerror(errno));
 		ret=EXIT_FAILURE;
 	}
@@ -231,6 +196,8 @@ int main(int _argc,const char **_argv){
 		ogg_int64_t nsamples;
 		opus_int32  bitrate;
 		int         prev_li;
+		opus_int16*		pcm = malloc(120*48*2*sizeof(opus_int16));
+		unsigned char*	out = malloc(120*48*2*2*sizeof(unsigned char));
 		prev_li=-1;
 		nsamples=0;
 		pcm_offset=op_pcm_tell(of);
@@ -241,8 +208,8 @@ int main(int _argc,const char **_argv){
 		bitrate=0;
 		for(;;){
 			ogg_int64_t   next_pcm_offset;
-			opus_int16    pcm[120*48*2];
-			unsigned char out[120*48*2*2];
+			//opus_int16*		pcm = malloc(120*48*2*sizeof(opus_int16));
+			//unsigned char*	out = malloc(120*48*2*2*sizeof(unsigned char));
 			int           li;
 			int           si;
 			/*Although we would generally prefer to use the float interface, WAV
@@ -251,7 +218,6 @@ int main(int _argc,const char **_argv){
 			ret=op_read_stereo(of,pcm,sizeof(pcm)/sizeof(*pcm));
 			if(ret<0){
 				fprintf(stderr,"\nError decoding '%s': %i\n",_argv[1],ret);
-				if(is_ssl)fprintf(stderr,"Possible truncation attack?\n");
 				ret=EXIT_FAILURE;
 				break;
 			}
@@ -352,7 +318,7 @@ int main(int _argc,const char **_argv){
 				out[2*si+0]=(unsigned char)(pcm[si]&0xFF);
 				out[2*si+1]=(unsigned char)(pcm[si]>>8&0xFF);
 			}
-			if(!fwrite(out,sizeof(*out)*4*ret,1,stdout)){
+			if(!fwrite(out,sizeof(*out)*4*ret,1,wav)){
 				fprintf(stderr,"\nError writing decoded audio data: %s\n",
 						strerror(errno));
 				ret=EXIT_FAILURE;
@@ -360,7 +326,10 @@ int main(int _argc,const char **_argv){
 			}
 			nsamples+=ret;
 			prev_li=li;
+			//End of for loop.
 		}
+		free(pcm);
+		free(out);
 		if(ret==EXIT_SUCCESS){
 			fprintf(stderr,"\nDone: played ");
 			print_duration(stderr,nsamples,3);
@@ -373,8 +342,8 @@ int main(int _argc,const char **_argv){
 		}
 		if(output_seekable&&nsamples!=duration){
 			make_wav_header(wav_header,nsamples);
-			if(fseek(stdout,0,SEEK_SET)||
-					!fwrite(wav_header,sizeof(wav_header),1,stdout)){
+			if(fseek(wav,0,SEEK_SET)||
+					!fwrite(wav_header,sizeof(wav_header),1,wav)){
 				fprintf(stderr,"Error rewriting WAV header: %s\n",strerror(errno));
 				ret=EXIT_FAILURE;
 			}
