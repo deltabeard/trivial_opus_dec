@@ -1,1 +1,4 @@
-gcc trivial_example.c -lopus
+A very trivial example of an Opus decoder using the Opusfile library. I used to
+this to help me implement Opus in to the ctrmus program.
+
+gcc trivial_example.c -lopusfile -O3 -Wall
