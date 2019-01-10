@@ -1,4 +1,8 @@
 A very trivial example of an Opus decoder using the Opusfile library. I used to
 this to help me implement Opus in to the ctrmus program.
 
-gcc trivial_example.c -lopusfile -O3 -Wall
+gcc -O3 -Wall -I/usr/include/opus trivial_opusdec.c -lopusfile -o trivial_opusdec
+
+Example (use SoX):
+
+./trivial_opusdec test.opus | play -r 48k -e signed -b 16 -c 2 -
