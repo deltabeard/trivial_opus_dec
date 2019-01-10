@@ -5,4 +5,4 @@ gcc -O3 -Wall -I/usr/include/opus trivial_opusdec.c -lopusfile -o trivial_opusde
 
 Example (use SoX):
 
-./trivial_opusdec test.opus | play -r 48k -e signed -b 16 -c 2 -
+./trivial_opusdec test.opus | play -t raw -r 48k -e signed -b 16 -c 2 -
